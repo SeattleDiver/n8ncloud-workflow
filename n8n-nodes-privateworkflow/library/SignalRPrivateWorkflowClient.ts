@@ -1,0 +1,337 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// SignalRPrivateWorkflowClient.ts
+// A thin SignalR wrapper for use inside an n8n Trigger node.
+
+import type { HubConnection } from '@microsoft/signalr';
+import {
+	HubConnectionBuilder,
+	LogLevel,
+	HttpTransportType,
+} from '@microsoft/signalr';
+
+// Node runtime needs a WebSocket implementation for SignalR:
+import NodeWebSocket from 'ws';
+if (typeof (globalThis as any).WebSocket === 'undefined') {
+	(globalThis as any).WebSocket = NodeWebSocket as unknown as typeof WebSocket;
+}
+
+export interface PrivateWorkflowRequest {
+	requestId?: string;
+	RequestId?: string;
+
+	method?: string;
+	Method?: string;
+
+	path?: string;
+	Path?: string;
+
+	payload?: string; // may be base64 or JSON string
+	Payload?: string;
+
+	headers?: Record<string, string>;
+	Headers?: Record<string, string>;
+
+	sessionId?: string;
+	SessionId?: string;
+}
+
+export interface PrivateWorkflowResponse {
+	RequestId: string;
+	SessionId?: string;
+	StatusCode: number;
+	Path?: string;
+	Headers?: Record<string, string>;
+	Payload?: string; // base64
+	IsFinal: boolean;
+}
+
+export interface SignalRClientConfig {
+	hubUrl: string;      // e.g., https://hub.n8ncloud.io/workflow
+	hubPath: string;     // e.g., mediasix/workflow-test
+	apiKey?: string;     // your app-level API key (not the SignalR bearer)
+	accessToken?: string; // optional: bearer presented to the hub
+	logLevel?: 'none' | 'info' | 'debug';
+	logger?: {
+		info: (msg: string, ...args: any[]) => void;
+		warn: (msg: string, ...args: any[]) => void;
+		error: (msg: string, ...args: any[]) => void;
+	};
+	/**
+	 * Called whenever the hub invokes "ExecutePrivateWorkflow".
+	 * Return value: an object whose contents will be returned back to the hub.
+	 * You can return either:
+	 *  - a plain JS object (we'll JSON.stringify and base64 it), or
+	 *  - a string (treated as the exact response body), or
+	 *  - a Buffer/Uint8Array (sent as-is in base64).
+	 */
+	onExecute: (req: {
+		raw: PrivateWorkflowRequest;
+		decodedJson?: any;      // parsed JSON if payload looked like JSON/base64->JSON
+		decodedText?: string;   // decoded payload string (if any)
+	}) => Promise<any> | any;
+}
+
+function mask(s?: string, keep = 4): string {
+	if (!s) return '(empty)';
+	return s.length <= keep ? '*'.repeat(s.length) : s.slice(0, keep) + '…';
+}
+
+/**
+ * If input looks like JSON, return it as-is.
+ * If it looks like base64(JSON), base64-decode and return JSON string.
+ * Else return raw string.
+ */
+function decodePayloadString(payload?: string): string | null {
+	if (!payload) return null;
+	const s = String(payload).trim();
+
+	const looksJson =
+		(s.startsWith('{') && s.endsWith('}')) ||
+		(s.startsWith('[') && s.endsWith(']'));
+
+	if (looksJson) return s;
+
+	// try base64→utf8→JSON
+	try {
+		const utf8 = Buffer.from(s, 'base64').toString('utf8');
+		JSON.parse(utf8); // validate
+		return utf8;
+	} catch {
+		// not base64(JSON); just return raw
+		return s;
+	}
+}
+
+function pick<T>(a: T | undefined, b: T | undefined): T | undefined {
+	return a !== undefined ? a : b;
+}
+
+export class SignalRPrivateWorkflowClient {
+	private conn: HubConnection | null = null;
+	private readonly cfg: SignalRClientConfig;
+	private readonly urlWithPath: string;
+
+	constructor(cfg: SignalRClientConfig) {
+		this.cfg = cfg;
+		this.urlWithPath = `${cfg.hubUrl}?group=${encodeURIComponent(cfg.hubPath)}`;
+		this.log('info', 'SignalR client created', {
+			hubUrl: cfg.hubUrl,
+			hubPath: cfg.hubPath,
+			apiKeySet: Boolean(cfg.apiKey),
+			tokenSet: Boolean(cfg.accessToken),
+			urlWithPath: this.urlWithPath,
+		});
+	}
+
+	private onceResolvers: Array<() => void> = [];
+
+	// Add this method to the class
+	public waitForNextMessage(timeoutMs = 60000): Promise<void> {
+		return new Promise<void>((resolve, reject) => {
+			let done = false;
+			const finish = () => {
+				if (!done) {
+					done = true;
+					resolve();
+				}
+			};
+
+			// Resolve on the *next* ExecutePrivateWorkflow we finish handling
+			this.onceResolvers.push(finish);
+
+			// Optional timeout
+			if (timeoutMs > 0) {
+				setTimeout(() => {
+					if (!done) {
+						done = true;
+						reject(new Error(`Timed out waiting for next message after ${timeoutMs} ms`));
+					}
+				}, timeoutMs);
+			}
+		});
+	}
+
+	/** Start the connection (negotiate first, then fall back to direct WebSockets). */
+	public async start(): Promise<void> {
+		// Try negotiate path
+		try {
+			this.conn = this.buildConnection({
+				skipNegotiation: false,
+				transport: undefined,
+			});
+			await this.conn.start();
+			this.log('info', 'Connected via negotiate', { connectionId: this.conn.connectionId });
+		} catch (e: any) {
+			this.log('warn', 'Negotiate failed; trying direct WebSockets…', e?.message || e);
+			// Fallback: direct WS
+			this.conn = this.buildConnection({
+				skipNegotiation: true,
+				transport: HttpTransportType.WebSockets,
+			});
+			await this.conn.start();
+			this.log('info', 'Connected via direct WebSockets', { connectionId: this.conn.connectionId });
+		}
+
+		// Now that we're connected, wire events and register the client
+		this.wireHandlers();
+		await this.registerClient();
+		this.log('info', 'Ready. Listening for ExecutePrivateWorkflow', { url: this.urlWithPath });
+	}
+
+	/** Stop/close the connection. */
+	public async stop(): Promise<void> {
+		if (this.conn) {
+			try {
+				await this.conn.stop();
+			} finally {
+				this.conn = null;
+			}
+			this.log('info', 'SignalR connection stopped');
+		}
+	}
+
+	// ----------------------- internals -----------------------
+
+	private buildConnection(opts: {
+		skipNegotiation: boolean;
+		transport?: HttpTransportType;
+	}): HubConnection {
+		const { accessToken, logLevel } = this.cfg;
+
+		const builder = new HubConnectionBuilder()
+			.withUrl(this.urlWithPath, {
+				accessTokenFactory: accessToken ? () => accessToken : undefined,
+				skipNegotiation: opts.skipNegotiation,
+				transport: opts.transport,
+			})
+			// backoff: immediate, 1s, 1.5s, 2s, 5s, 10s, 30s
+			.withAutomaticReconnect([0, 1000, 1500, 2000, 5000, 10000, 30000])
+			.configureLogging(
+				logLevel === 'debug'
+					? LogLevel.Debug
+					: logLevel === 'info'
+						? LogLevel.Information
+						: LogLevel.None,
+			);
+
+		return builder.build();
+	}
+
+	private wireHandlers(): void {
+		if (!this.conn) return;
+
+		// Hub → client method
+		this.conn.on('ExecutePrivateWorkflow', async (req: PrivateWorkflowRequest) => {
+			await this.handleExecute(req).catch((err) => {
+				this.log('error', 'Error in ExecutePrivateWorkflow handler', err);
+			});
+		});
+
+		this.conn.onreconnecting((err) => {
+			this.log('warn', 'Reconnecting…', err?.message || '');
+		});
+
+		this.conn.onreconnected(async (id) => {
+			this.log('info', 'Reconnected', { connectionId: id });
+			// Re-register so the server still associates your path/api-key
+			await this.registerClient().catch((err) => {
+				this.log('error', 'Re-registration after reconnect failed', err);
+			});
+		});
+
+		this.conn.onclose((err) => {
+			this.log('warn', 'Connection closed', err?.message || '');
+		});
+	}
+
+	private async registerClient(): Promise<void> {
+		if (!this.conn) return;
+
+		const payload = {
+			apiKey: this.cfg.apiKey ?? '', // app-level API key
+			path: this.cfg.hubPath,        // route/path to associate on server
+		};
+
+		try {
+			const ack = await this.conn.invoke('RegisterPrivateWorkflow', payload);
+			this.log(
+				'info',
+				`Registration sent`,
+				{ path: this.cfg.hubPath, apiKey: mask(this.cfg.apiKey) },
+			);
+			if (ack) this.log('debug', 'Registration ack', ack);
+		} catch (e: any) {
+			this.log('error', 'Registration failed', e?.message || e);
+		}
+	}
+
+	private async handleExecute(req: PrivateWorkflowRequest): Promise<void> {
+		if (!this.conn) return;
+
+		const requestId = pick(req.requestId, req.RequestId) ?? '';
+		const path = pick(req.path, req.Path) ?? '';
+		const payloadStr = pick(req.payload, req.Payload) ?? '';
+
+		this.log('info', 'ExecutePrivateWorkflow received', {
+			requestId,
+			path,
+		});
+
+		// Attempt to produce helpful decoded views
+		const decodedText = decodePayloadString(payloadStr) ?? undefined;
+		let decodedJson: any | undefined = undefined;
+		if (decodedText) {
+			try {
+				decodedJson = JSON.parse(decodedText);
+			} catch {
+				// not JSON; ignore
+			}
+		}
+
+		// Call user handler
+		const result = await this.cfg.onExecute({ raw: req, decodedJson, decodedText });
+
+		// Serialize result to bytes
+		let bodyBytes: Buffer;
+		if (Buffer.isBuffer(result)) {
+			bodyBytes = result;
+		} else if (result instanceof Uint8Array) {
+			bodyBytes = Buffer.from(result);
+		} else if (typeof result === 'string') {
+			bodyBytes = Buffer.from(result, 'utf8');
+		} else {
+			// Assume plain object
+			bodyBytes = Buffer.from(JSON.stringify(result ?? {}), 'utf8');
+		}
+
+		const response: PrivateWorkflowResponse = {
+			RequestId: requestId,
+			SessionId: (req as any).SessionId ?? req.sessionId,
+			StatusCode: 200,
+			Path: path,
+			Headers: { 'content-type': 'application/json' },
+			Payload: bodyBytes.toString('base64'),
+			IsFinal: true,
+		};
+
+		await this.conn.invoke('CompletePrivateWorkflow', response);
+		this.log('info', 'CompletePrivateWorkflow sent', { requestId });
+
+		// Wake exactly one manual waiter (if any)
+		const resolver = this.onceResolvers.shift();
+		if (resolver) resolver();
+	}
+
+	private log(level: 'info' | 'warn' | 'error' | 'debug' | 'none', msg: string, ...args: any[]) {
+		const l = this.cfg.logger;
+		if (level === 'none') return;
+		if (level === 'debug' && this.cfg.logLevel !== 'debug') return;
+
+		switch (level) {
+			case 'info': l?.info?.(msg, ...args); break;
+			case 'warn': l?.warn?.(msg, ...args); break;
+			case 'error': l?.error?.(msg, ...args); break;
+			case 'debug': l?.info?.(`[debug] ${msg}`, ...args); break;
+		}
+	}
+}
