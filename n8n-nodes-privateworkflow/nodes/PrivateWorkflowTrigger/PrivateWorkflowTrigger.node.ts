@@ -43,7 +43,11 @@ export class PrivateWorkflowTrigger implements INodeType {
       }
     ]};
 
+		// ------------------------------------------------------------------------------------------------------------------------------------------------
+		// trigger is called when n8n runs the workflow trigger
+		// ------------------------------------------------------------------------------------------------------------------------------------------------
     async trigger(this: ITriggerFunctions): Promise<ITriggerResponse> {
+
         const hubUrl = this.getNodeParameter('hubUrl', 0) as string;
         const hubPath = this.getNodeParameter('hubPath', 0) as string;
 
@@ -83,7 +87,17 @@ export class PrivateWorkflowTrigger implements INodeType {
 
                 // Return a response body to the hub (encoded by the wrapper)
                 return { ok: true, receivedAt: new Date().toISOString() };
-            }
+            },
+					  onConnectionError: async (err: unknown, ctx?: Record<string, unknown>) => {
+								// 1) stop SignalR
+								try { await client?.stop(); } catch {}
+								this.logger.info('onConnectionError: ' + String(err));
+
+								// 2) surface the error to n8n so the trigger terminates
+								// const error = err instanceof Error ? err : new Error(String(err));
+								// inside onConnectionError
+								throw new NodeOperationError(this.getNode(), String(err));
+						}
         });
 
         // Idempotent start helper

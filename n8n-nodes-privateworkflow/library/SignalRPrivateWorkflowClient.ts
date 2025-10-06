@@ -69,6 +69,9 @@ export interface SignalRClientConfig {
 		decodedJson?: any;      // parsed JSON if payload looked like JSON/base64->JSON
 		decodedText?: string;   // decoded payload string (if any)
 	}) => Promise<any> | any;
+
+	// On ConnectionError (invalid API key or no connection)
+  onConnectionError?: (error: unknown, context?: Record<string, unknown>) => void;
 }
 
 function mask(s?: string, keep = 4): string {
@@ -248,19 +251,43 @@ export class SignalRPrivateWorkflowClient {
 		if (!this.conn) return;
 
 		const payload = {
-			apiKey: this.cfg.apiKey ?? '', // app-level API key
-			path: this.cfg.hubPath,        // route/path to associate on server
+			apiKey: this.cfg.apiKey ?? '',
+			path: this.cfg.hubPath,
 		};
 
 		try {
 			const ack = await this.conn.invoke('RegisterPrivateWorkflow', payload);
-			this.log(
-				'info',
-				`Registration sent`,
-				{ path: this.cfg.hubPath, apiKey: mask(this.cfg.apiKey) },
-			);
+			this.log('info', 'Registration sent', { path: this.cfg.hubPath, apiKey: mask(this.cfg.apiKey) });
+
+			this.log('info', JSON.stringify(ack));
+
+			// Treat as failure if boolean false, or object with { success: false }
+			const failed =
+				ack === false ||
+				(ack && typeof ack === 'object' && 'success' in (ack as any) && (ack as any).success === false);
+
+			if (failed) {
+				const err = new Error('API key invalid or registration rejected');
+				// Report up to parent; do NOT call the hub here
+				this.cfg.onConnectionError?.(err, {
+					phase: 'register',
+					reason: 'Failed to register this workflow with cloud hub.  Verify you have the correct API key.',
+					payload,
+					ack,
+				});
+				this.log('error', err.message, { payload, ack });
+				return;
+			}
+
 			if (ack) this.log('debug', 'Registration ack', ack);
 		} catch (e: any) {
+			// Report up to parent; do NOT call the hub here
+			this.cfg.onConnectionError?.(e, {
+				phase: 'register',
+				reason: 'invokeError',
+				payload,
+				op: 'invoke.RegisterPrivateWorkflow',
+			});
 			this.log('error', 'Registration failed', e?.message || e);
 		}
 	}
