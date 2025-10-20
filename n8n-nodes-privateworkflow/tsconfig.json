@@ -20,6 +20,9 @@
 		"sourceMap": true,
 		"skipLibCheck": true,
 		"outDir": "./dist/",
+    "typeRoots": [
+      "./node_modules/@types"
+    ]
 	},
 	"include": [
 		"credentials/**/*",

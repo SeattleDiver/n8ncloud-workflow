@@ -30,10 +30,12 @@
   "n8n": {
     "n8nNodesApiVersion": 1,
     "credentials": [
-      "dist/credentials/PrivateWorkflowApi.credentials.js"
+      "dist/credentials/PrivateWorkflowPrivateApi.credentials.js",
+      "dist/credentials/PrivateWorkflowPublicApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/ExampleNode/PrivateWorkflowTrigger.node.ts"
+      "dist/nodes/ExampleNode/PrivateWorkflowTrigger.node.ts",
+      "dist/nodes/ExampleNode/PrivateWorkflow.node.ts"
     ]
   },
   "devDependencies": {
@@ -46,13 +48,14 @@
     "typescript": "^5.8.2"
   },
   "peerDependencies": {
-    "n8n-workflow": "^1.111.0"
+    "n8n-workflow": "^1.113.0"
   },
   "bugs": {
     "url": "https://github.com/seattlediver/n8n-cloudworkflow/issues"
   },
   "dependencies": {
     "@microsoft/signalr": "^9.0.6",
+    "n8n-core": "^1.115.0",
     "ws": "^8.18.3"
   }
 }

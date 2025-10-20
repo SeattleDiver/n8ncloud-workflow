@@ -117,7 +117,7 @@ export class SignalRPrivateWorkflowClient {
 	constructor(cfg: SignalRClientConfig) {
 		this.cfg = cfg;
 		this.urlWithPath = `${cfg.hubUrl}?group=${encodeURIComponent(cfg.hubPath)}`;
-		this.log('info', 'SignalR client created', {
+		this.log('info', 'SignalR client created: ' + cfg.hubUrl, {
 			hubUrl: cfg.hubUrl,
 			hubPath: cfg.hubPath,
 			apiKeySet: Boolean(cfg.apiKey),
@@ -289,6 +289,7 @@ export class SignalRPrivateWorkflowClient {
 				op: 'invoke.RegisterPrivateWorkflow',
 			});
 			this.log('error', 'Registration failed', e?.message || e);
+			throw e.message || e;
 		}
 	}
 

@@ -1,10 +1,8 @@
 {
-	"node": "n8n-nodes-base.PrivateWorkflowTrigger",
+	"node": "n8n-nodes-base.httpbin",
 	"nodeVersion": "1.0",
 	"codexVersion": "1.0",
-	"categories": [
-		"Trigger"
-	],
+	"categories": ["Development", "Communication"],
 	"resources": {
 		"credentialDocumentation": [
 			{

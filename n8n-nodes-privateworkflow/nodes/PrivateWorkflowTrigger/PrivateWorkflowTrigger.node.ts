@@ -3,45 +3,56 @@ import { SignalRPrivateWorkflowClient } from '../../library/SignalRPrivateWorkfl
 
 export class PrivateWorkflowTrigger implements INodeType {
 
-    description: INodeTypeDescription = {
-    displayName: 'Execute Private Workflow Trigger',
-    name: 'privateWorkflowTrigger',
-    icon: 'file:logo.svg',
-    group: ['trigger'],
-    version: 1,
-    description: 'Execute Private Workflow Trigger',
-    defaults: {
-      name: 'Execute Private Workflow Trigger',
-      color: '#00c896',
-    },
-    inputs: [],
-    outputs: ['main'],
-    credentials: [
-      {
-         name: 'privateWorkflowApi',
-         required: true,
-      },
-    ],
-    properties: [
-      {
-          displayName: 'Hub URL',
-          name: 'hubUrl',
-          type: 'string',
-          default: 'http://localhost:5268/workflow',
-          placeholder: 'http://localhost:5268/workflow',
-          description: 'Development base URL of the SignalR hub',
-          required: true,
-      },
-      {
-          displayName: 'Hub Path / Group',
-          name: 'hubPath',
-          type: 'string',
-          default: 'mediasix/workflow-test',
-          placeholder: 'mediasix/workflow-test',
-          description: 'Route or group to register against on the hub',
-          required: true,
-      }
-    ]};
+	description: INodeTypeDescription = {
+			displayName: 'Execute Private Workflow Trigger',
+			name: 'privateWorkflowTrigger',
+			group: ['trigger'],
+			version: 1,
+			description: 'When a remote private workflow is executed',
+			icon: 'file:cloud-network.svg',
+			defaults: {
+				name: 'Execute Private Workflow Trigger',
+				color: '#00c896',
+			},
+			inputs: [],
+			outputs: ['main'],
+			credentials: [
+				{
+					name: 'privateWorkflowApi',
+					required: true,
+				},
+			],
+			properties: [
+				{
+					displayName: 'Hub Environment',
+					name: 'hubUrl',
+					type: 'options',
+					default: 'http://localhost:5268/workflow',
+					description: 'Select the environment for the SignalR hub connection.',
+					options: [
+						{
+							name: 'Development',
+							value: 'http://localhost:5268/workflow',
+							description: 'Local development server.',
+						},
+						{
+							name: 'Production',
+							value: 'https://hub.n8ncloud.io/workflow',
+							description: 'Cloud production server.',
+						},
+					],
+				},
+				{
+					displayName: 'Workflow Name',
+					name: 'hubPath',
+					type: 'string',
+					default: '',
+					placeholder: 'e.g. mediasix/workflow-test',
+					required: true,
+					description: 'The private workflow path to invoke.',
+				}
+			],
+		};
 
 		// ------------------------------------------------------------------------------------------------------------------------------------------------
 		// trigger is called when n8n runs the workflow trigger
