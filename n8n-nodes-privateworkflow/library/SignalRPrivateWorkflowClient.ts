@@ -51,6 +51,8 @@ export interface SignalRClientConfig {
 	apiKey?: string;     // your app-level API key (not the SignalR bearer)
 	accessToken?: string; // optional: bearer presented to the hub
 	logLevel?: 'none' | 'info' | 'debug';
+  isSingleNodeRun?: boolean;
+
 	logger?: {
 		info: (msg: string, ...args: any[]) => void;
 		warn: (msg: string, ...args: any[]) => void;
@@ -65,7 +67,7 @@ export interface SignalRClientConfig {
 	 *  - a Buffer/Uint8Array (sent as-is in base64).
 	 */
 	onExecute: (req: {
-		raw: PrivateWorkflowRequest;
+		request?: PrivateWorkflowRequest;
 		decodedJson?: any;      // parsed JSON if payload looked like JSON/base64->JSON
 		decodedText?: string;   // decoded payload string (if any)
 	}) => Promise<any> | any;
@@ -247,6 +249,41 @@ export class SignalRPrivateWorkflowClient {
 		});
 	}
 
+	public async sendResponseToHub(requestId: string, body: any, path?: string): Promise<void> {
+		if (!this.conn) {
+			this.log('warn', 'Cannot send response: connection not active');
+			return;
+		}
+
+		try {
+			let bodyBytes: Buffer;
+			if (Buffer.isBuffer(body)) {
+				bodyBytes = body;
+			} else if (body instanceof Uint8Array) {
+				bodyBytes = Buffer.from(body);
+			} else if (typeof body === 'string') {
+				bodyBytes = Buffer.from(body, 'utf8');
+			} else {
+				// Assume plain object → JSON
+				bodyBytes = Buffer.from(JSON.stringify(body ?? {}), 'utf8');
+			}
+
+			const response: PrivateWorkflowResponse = {
+				RequestId: requestId,
+				StatusCode: 200,
+				Path: path,
+				Headers: { 'content-type': 'application/json' },
+				Payload: bodyBytes.toString('base64'),
+				IsFinal: true,
+			};
+
+			await this.conn.invoke('CompletePrivateWorkflow', response);
+			this.log('info', `Sent CompletePrivateWorkflow for ${requestId}`);
+		} catch (err: any) {
+			this.log('error', `Failed to send response for ${requestId}`, err);
+		}
+	}
+
 	private async registerClient(): Promise<void> {
 		if (!this.conn) return;
 
@@ -317,37 +354,24 @@ export class SignalRPrivateWorkflowClient {
 		}
 
 		// Call user handler
-		const result = await this.cfg.onExecute({ raw: req, decodedJson, decodedText });
+ 		//const wasSingleNodeAtEntry = !!this.cfg.isSingleNodeRun;
+		var result = await this.cfg.onExecute({ request: req, decodedJson, decodedText });
 
-		// Serialize result to bytes
-		let bodyBytes: Buffer;
-		if (Buffer.isBuffer(result)) {
-			bodyBytes = result;
-		} else if (result instanceof Uint8Array) {
-			bodyBytes = Buffer.from(result);
-		} else if (typeof result === 'string') {
-			bodyBytes = Buffer.from(result, 'utf8');
-		} else {
-			// Assume plain object
-			bodyBytes = Buffer.from(JSON.stringify(result ?? {}), 'utf8');
+ 		// 🔹 Explicit immediate-response path: only if result is a real object (ack)
+		if (result && typeof result === 'object' && 'ok' in result) {
+			this.log('info', 'Immediate response detected — completing workflow', { requestId });
+			await this.sendResponseToHub(requestId, result, path);
+			this.log('info', 'CompletePrivateWorkflow sent (immediate mode)', { requestId });
 		}
 
-		const response: PrivateWorkflowResponse = {
-			RequestId: requestId,
-			SessionId: (req as any).SessionId ?? req.sessionId,
-			StatusCode: 200,
-			Path: path,
-			Headers: { 'content-type': 'application/json' },
-			Payload: bodyBytes.toString('base64'),
-			IsFinal: true,
-		};
-
-		await this.conn.invoke('CompletePrivateWorkflow', response);
-		this.log('info', 'CompletePrivateWorkflow sent', { requestId });
-
-		// Wake exactly one manual waiter (if any)
-		const resolver = this.onceResolvers.shift();
-		if (resolver) resolver();
+		// Only wake manual test mode resolvers,
+		// not full workflow execution mode
+		// this.log('info', `[handleExecute] isSingleNodeRun ${wasSingleNodeAtEntry}`, { requestId });
+		// if (wasSingleNodeAtEntry) {
+		// 	this.log('info', 'resolving...')
+		// 	const resolver = this.onceResolvers.shift();
+		// 	if (resolver) resolver();
+		// }
 	}
 
 	private log(level: 'info' | 'warn' | 'error' | 'debug' | 'none', msg: string, ...args: any[]) {

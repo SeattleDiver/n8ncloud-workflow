@@ -1,9 +1,11 @@
-import { ITriggerFunctions, INodeType, INodeTypeDescription, ITriggerResponse, NodeOperationError } from 'n8n-workflow';
+import { ITriggerFunctions, INodeType, INodeTypeDescription, ITriggerResponse, NodeOperationError, jsonStringify } from 'n8n-workflow';
 import { SignalRPrivateWorkflowClient } from '../../library/SignalRPrivateWorkflowClient'
 import { PrivateWorkflowResponseRegistry } from '../../library/PrivateWorkflowResponseRegistry';
 import crypto from 'crypto'
 
 export class PrivateWorkflowTrigger implements INodeType {
+
+	onceResolvers: Array<() => void> = [];
 
 	description: INodeTypeDescription = {
 			displayName: 'Execute Private Workflow Trigger',
@@ -113,20 +115,24 @@ export class PrivateWorkflowTrigger implements INodeType {
             apiKey,
             accessToken,
             logLevel: 'info',
-
-            logger: {
-                info: (m, ...a) => self.logger.info(m, ...a),
-                warn: (m, ...a) => self.logger.warn(m, ...a),
-                error: (m, ...a) => self.logger.error(m, ...a),
-            },
+						isSingleNodeRun: false,
+			      logger: {
+								info: (m, ...a) => self.logger.info(m, ...a),
+								warn: (m, ...a) => self.logger.warn(m, ...a),
+								error: (m, ...a) => self.logger.error(m, ...a),
+						},
 
 						// -------------------------------------------------------------------------------------------------------------------------------------------
 						// onExecute is called when the SignalR connection receives a message from the hub
 						//   The payload may be encrypted. If we have a privateKey defined, then we must decrypt
 						//   the payload before we use it
 						// -------------------------------------------------------------------------------------------------------------------------------------------
-						onExecute: async ({ decodedJson, decodedText }) => {
+						onExecute: async ({ request, decodedJson, decodedText }) => {
+
 							try {
+
+								// Reset the isSingleNodeRun flag
+								(client as any).cfg.isSingleNodeRun = false;
 
 								// Prepare the item
 								//const item = decodedJson ?? { text: decodedText ?? null };
@@ -134,73 +140,68 @@ export class PrivateWorkflowTrigger implements INodeType {
 									? (decodedJson as any).json
 									: decodedJson ?? { text: decodedText ?? null };
 
+							  const requestId =
+										request?.requestId ??
+										request?.RequestId ??
+										'unknown';
+
   							// Get the respond mode selected in node UI
 								const respondMode = this.getNodeParameter('respond', 0) as string;
 								this.logger.info('respondMode: '+ respondMode);
+								this.logger.info('requestId: ' + requestId);
+								this.logger.info('json: ' + jsonStringify(decodedJson));
 
 								switch (respondMode) {
 
 									// ------------------------------------------------------------------------------------------------
 									// 1️⃣ Respond Immediately
 									// ------------------------------------------------------------------------------------------------
-									case 'immediately': {
+									case 'immediately':
 										// Emit the message into n8n for normal workflow execution
 										self.emit([self.helpers.returnJsonArray([base])]);
 
-										// Respond to SignalR client right away
+										self.logger?.info?.('[PrivateWorkflowTrigger] Responding immediately to hub...');
 										return {
 											ok: true,
 											mode: respondMode,
 											receivedAt: new Date().toISOString(),
 										};
-									}
 
-									// ------------------------------------------------------------------------------------------------
-									// 2️⃣ Respond to Private Workflow
-									// ------------------------------------------------------------------------------------------------
+									// ------------------------------------------------------------------------------------
+									// 2️⃣ RESPOND TO PRIVATE WORKFLOW
+									// ------------------------------------------------------------------------------------
 									case 'respondToPrivateWorkflow': {
+
 										const correlationId = crypto.randomUUID();
 										const payload = { ...base, correlationId };
 
-										// Emit to workflow (starts execution)
+										// Emit to workflow (starts a new execution in n8n)
 										self.emit([self.helpers.returnJsonArray([payload])]);
 										self.logger?.info?.(`[PrivateWorkflowTrigger] Emitted payload with correlationId=${correlationId}`);
 
-										// Create registry entry for this request
 										const entry = {
-											resolve: (data: any) => {
-												self.logger?.info?.(`[PrivateWorkflowTrigger] Response received for ${correlationId}`);
-												// Optional: send hub response here if needed
-											},
-											reject: (err: any) => {
-												self.logger?.warn?.(`[PrivateWorkflowTrigger] Rejected for ${correlationId}: ${err}`);
-												// Optional: send hub error here
-											},
+											client,     // the live SignalRPrivateWorkflowClient
+											requestId,  // original hub RequestId
+											path: hubPath,
+											isManual: this.getMode && this.getMode() === 'manual',
 											timeout: setTimeout(() => {
 												PrivateWorkflowResponseRegistry.delete(correlationId);
-												self.logger?.warn?.(`[PrivateWorkflowTrigger] Timeout for ${correlationId}`);
-												// Optional: notify hub of timeout here
+												self.logger?.warn?.(
+													`[PrivateWorkflowTrigger] Timeout waiting for response (correlationId=${correlationId})`
+												);
 											}, 120_000),
-											isManual: this.getMode && this.getMode() === 'manual',
 										};
 
-										// Register entry globally so Respond node can resolve it later
-										PrivateWorkflowResponseRegistry.set(correlationId, entry);
+										// Register the pending response in the global registry
+										PrivateWorkflowResponseRegistry.register(correlationId, entry);
+
 										self.logger?.info?.(
-											`[PrivateWorkflowTrigger] Waiting for RespondToPrivateWorkflow node (mode=${entry.isManual ? 'manual' : 'active'}) for ${correlationId}`
+											`[PrivateWorkflowTrigger] Registered correlationId=${correlationId} for deferred response (requestId=${requestId})`
 										);
 
-										// The key: don't await here in manual mode
-										if (entry.isManual) {
-											self.logger?.info?.(`[ManualMode] Registered ${correlationId}, waiting for Respond node later.`);
-											return { ok: true, correlationId };
-										}
-
-										// Wait until Respond node resolves this entry
-										return await new Promise((resolve, reject) => {
-											entry.resolve = resolve;
-											entry.reject = reject;
-										});
+										// 5️⃣ Do not send any hub response now; Respond node will do it explicitly
+										// Simply return so n8n finishes trigger execution normally
+										return;
 									}
 
 									// ------------------------------------------------------------------------------------------------
@@ -227,7 +228,6 @@ export class PrivateWorkflowTrigger implements INodeType {
 										return { ok: true, receivedAt: new Date().toISOString() };
 									}
 								}
-
 
 							} catch (err) {
 
@@ -286,33 +286,108 @@ export class PrivateWorkflowTrigger implements INodeType {
         // - Start (or wait for) the SignalR connection
         // - Keep it running so incoming events stream to the UI
         // - Optionally, emit a small "connected" message so users see immediate feedback
+				// const manualTriggerFunction = async function (this: ITriggerFunctions) {
+				// 	await ensureStarted();
+				// 	self.logger.info('[ManualMode] Waiting for SignalR messages...');
+
+				// 	try {
+				// 		// Wait for a message or timeout
+				// 		await client.waitForNextMessage(60000);
+
+				// 		// ✅ Wait until all pending responses are completed before stopping
+				// 		let retries = 0;
+				// 		while (PrivateWorkflowResponseRegistry.count() > 0 && retries < 30) {
+				// 			self.logger.info(
+				// 				`[ManualMode] Waiting for ${PrivateWorkflowResponseRegistry.count()} pending responses...`
+				// 			);
+				// 			await new Promise(r => setTimeout(r, 1000));
+				// 			retries++;
+				// 		}
+				// 	} catch {
+				// 		self.logger.info('Manual trigger aborted or timed out.');
+				// 	} finally {
+				// 		try {
+				// 			await client.stop();
+				// 			started = false;
+				// 			self.logger.info('SignalR client stopped (after deferred responses).');
+				// 		} catch (err) {
+				// 			self.logger.warn(`Error stopping SignalR: ${(err as Error)?.message ?? err}`);
+				// 		}
+				// 	}
+				// };
+
+				// const manualTriggerFunction = async function (this: ITriggerFunctions) {
+
+				// 	(client as any).cfg.isSingleNodeRun = true;
+
+				// 	// Start connection if needed
+				// 	await ensureStarted();
+
+				// 	self.logger.info("[ManualMode] Trigger started — connection ensured, exiting immediately.");
+
+				// 	// IMPORTANT: do not wait for messages, do not stop client
+				// 	return;
+				// };
+
+				// const manualTriggerFunction = async function (this: ITriggerFunctions) {
+
+				// 	(client as any).cfg.isSingleNodeRun = true;
+
+				// 	// Start connection
+				// 	await ensureStarted();
+
+				// 	// Otherwise keep trigger open for workflow to respond
+				// 	self.logger.info("[ManualMode] Full workflow manual run — keeping trigger alive.");
+				// 	await new Promise<void>(() => {});
+				// };
+
 				const manualTriggerFunction = async function (this: ITriggerFunctions) {
-						await ensureStarted();
 
-						let stopped = false;
+					// Manual run only
+					if (self.getMode() !== 'manual') {
+						return;
+					}
 
-						const safeStop = async () => {
-								if (!stopped) {
-										stopped = true;
-										try {
-												await client.stop();
-												self.logger.info('SignalR manual run stopped.');
-										} catch (err) {
-												self.logger.warn(`Error stopping SignalR: ${(err as Error)?.message ?? err}`);
-										}
-										started = false;
-								}
-						};
+					self.logger.info('[ManualMode] Starting manual execution...');
+
+					return new Promise<void>(async (resolve) => {
+
+						// 1️⃣ Register resolver FIRST — critical
+						(self as any).onceResolvers.push(resolve);
+
+						// 2️⃣ Mark this workflow as single-node test mode
+						//    (needs to be AFTER pushing resolver)
+						(client as any).cfg.isSingleNodeRun = true;
 
 						try {
-								// Wait for the next message or timeout
-								await client.waitForNextMessage(60000);
+							// 3️⃣ Wait for an inbound SignalR event OR cancellation/timeout
+							self.logger.info('[ManualMode] Waiting for external event...');
+							await client.waitForNextMessage(60000); // 60s like webhook test
+
 						} catch (err) {
-								// If the manual run is aborted (Stop clicked), n8n throws an error
-								self.logger.info('Manual trigger aborted or timed out.');
-						} finally {
-								await safeStop();
+							self.logger.info(`[ManualMode] Aborted or timed out: ${String(err)}`);
 						}
+
+						// 4️⃣ Wait for deferred response to complete
+						let retries = 0;
+						while ((self as any).onceResolvers.length > 0 && retries < 60) { // up to 60s grace
+							self.logger.info(
+								`[ManualMode] Waiting for deferred resolver... pending=${(self as any).onceResolvers.length}`
+							);
+							await new Promise(r => setTimeout(r, 1000));
+							retries++;
+						}
+
+						// 5️⃣ Shutdown SignalR cleanly
+						try {
+							await client.stop();
+							self.logger.info('[ManualMode] SignalR connection stopped');
+						} catch (err) {
+							self.logger.warn(`[ManualMode] Error stopping SignalR: ${String(err)}`);
+						}
+
+						self.logger.info('[ManualMode] Completed manual execution');
+					});
 				};
 
 				return {

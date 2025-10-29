@@ -25,11 +25,11 @@ export class RespondToPrivateWorkflow implements INodeType {
 			{
 				displayName: 'Response Data',
 				name: 'responseData',
-				type: 'json',
-				default: '{}',
-				description: 'The data to send back to the waiting Private Workflow Trigger.',
+				type: 'string',
+				default: '={{ $json }}',
+				description: 'The data to send back to the waiting Private Workflow Trigger.'
 			},
-		],
+		]
 	};
 
 	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
@@ -51,14 +51,11 @@ export class RespondToPrivateWorkflow implements INodeType {
 				const key = String(correlationId);
 
 				const entry = PrivateWorkflowResponseRegistry.get(correlationId);
-				if (!entry) {
-					this.logger?.warn?.(`[Respond] No pending response for ${correlationId}`);
-					return [];
-				}
+				if (!entry) throw new Error(`No pending response for ${correlationId}`);
 
-				// Resolve whether manual or active
-				entry.resolve(responseData);
-				clearTimeout(entry.timeout);
+				this.logger?.info(`[RespondToPrivateWorkflow] entry.client.sendResponseToHub: responding now - requestId=${entry.requestId}, correlationId=${correlationId}`)
+				await entry.client.sendResponseToHub(entry.requestId, responseData, entry.path);
+
 				PrivateWorkflowResponseRegistry.delete(correlationId);
 
 				this.logger?.info?.(`[RespondToPrivateWorkflow] Responded for correlationId=${key}`);
