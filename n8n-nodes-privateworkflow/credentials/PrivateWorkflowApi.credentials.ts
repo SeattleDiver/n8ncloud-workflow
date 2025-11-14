@@ -33,7 +33,7 @@ export class PrivateWorkflowApi implements ICredentialType {
 			displayName: 'API Key',
 			name: 'apiKey',
 			type: 'string',
-			typeOptions: { password: true },
+			typeOptions: { password: false },
 			default: '',
 			required: true,
 			description: 'API key for authenticating with the n8nCloud Private Workflow API.',

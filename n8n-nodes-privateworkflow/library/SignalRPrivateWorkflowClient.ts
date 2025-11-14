@@ -8,6 +8,7 @@ import {
 	LogLevel,
 	HttpTransportType,
 } from '@microsoft/signalr';
+import { jsonStringify } from 'n8n-workflow';
 
 // Node runtime needs a WebSocket implementation for SignalR:
 import NodeWebSocket from 'ws';
@@ -58,6 +59,7 @@ export interface SignalRClientConfig {
 		warn: (msg: string, ...args: any[]) => void;
 		error: (msg: string, ...args: any[]) => void;
 	};
+
 	/**
 	 * Called whenever the hub invokes "ExecutePrivateWorkflow".
 	 * Return value: an object whose contents will be returned back to the hub.
@@ -357,21 +359,12 @@ export class SignalRPrivateWorkflowClient {
  		//const wasSingleNodeAtEntry = !!this.cfg.isSingleNodeRun;
 		var result = await this.cfg.onExecute({ request: req, decodedJson, decodedText });
 
- 		// 🔹 Explicit immediate-response path: only if result is a real object (ack)
-		if (result && typeof result === 'object' && 'ok' in result) {
-			this.log('info', 'Immediate response detected — completing workflow', { requestId });
-			await this.sendResponseToHub(requestId, result, path);
-			this.log('info', 'CompletePrivateWorkflow sent (immediate mode)', { requestId });
-		}
+		this.log('info', jsonStringify(result));
 
-		// Only wake manual test mode resolvers,
-		// not full workflow execution mode
-		// this.log('info', `[handleExecute] isSingleNodeRun ${wasSingleNodeAtEntry}`, { requestId });
-		// if (wasSingleNodeAtEntry) {
-		// 	this.log('info', 'resolving...')
-		// 	const resolver = this.onceResolvers.shift();
-		// 	if (resolver) resolver();
-		// }
+		// ✅ Wake manual mode "waitForNextMessage" completion
+		const resolver = this.onceResolvers?.shift?.();
+		if (resolver) resolver();
+
 	}
 
 	private log(level: 'info' | 'warn' | 'error' | 'debug' | 'none', msg: string, ...args: any[]) {

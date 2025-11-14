@@ -15,6 +15,9 @@ import type { SignalRPrivateWorkflowClient } from './SignalRPrivateWorkflowClien
 // Type: RegistryEntry
 // -----------------------------------------------------------------------------
 export interface RegistryEntry {
+
+	correlationId: string;
+
 	/** Reference to the SignalR client used to send the eventual response */
 	client: SignalRPrivateWorkflowClient;
 
