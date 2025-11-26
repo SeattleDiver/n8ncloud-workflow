@@ -1,15 +1,13 @@
 export declare class TinySignalRClient {
     private hubUrl;
     private apiKey;
+    private group?;
     private socket;
     private callbacks;
     private invocationId;
     private keepAliveInterval;
-    constructor(hubUrl: string, apiKey: string);
+    constructor(hubUrl: string, apiKey: string, group?: string | undefined);
     start(): Promise<void>;
-    /**
-     * Connects to the server.
-     */
     /**
      * Listen for messages from the server.
      */

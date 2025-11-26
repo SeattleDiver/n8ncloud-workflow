@@ -3,16 +3,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.TinySignalRClient = void 0;
 // TinySignalRClient.ts
 class TinySignalRClient {
-    constructor(hubUrl, apiKey) {
+    constructor(hubUrl, apiKey, group) {
         this.hubUrl = hubUrl;
         this.apiKey = apiKey;
+        this.group = group;
         this.socket = null;
         this.callbacks = new Map();
         this.invocationId = 0;
     }
     async start() {
         // 1. Negotiate
-        const negotiateUrl = `${this.hubUrl}/negotiate?apiKey=${encodeURIComponent(this.apiKey)}`;
+        var negotiateUrl = `${this.hubUrl}/negotiate?apiKey=${encodeURIComponent(this.apiKey)}`;
+        if (this.group) {
+            negotiateUrl += `&group=${encodeURIComponent(this.group)}`;
+        }
         const response = await fetch(negotiateUrl, { method: "POST" });
         if (!response.ok)
             throw new Error(`Negotiation failed: ${response.status} ${response.statusText}`);
@@ -38,10 +42,13 @@ class TinySignalRClient {
         if (negotiation.accessToken) {
             wsUrl += (wsUrl.indexOf("?") < 0 ? "?" : "&") + `access_token=${encodeURIComponent(negotiation.accessToken)}`;
         }
-        // 4. Open Socket
+        // 4. Attach Group (THIS FIXES OnConnectedAsync)
+        if (this.group) {
+            wsUrl += (wsUrl.indexOf("?") < 0 ? "?" : "&") + `group=${encodeURIComponent(this.group)}`;
+        }
+        // 5. Open Socket
         return new Promise((resolve, reject) => {
             this.socket = new WebSocket(wsUrl);
-            // ... rest of the method remains the same ...
             this.socket.onopen = () => {
                 console.log("Socket Open. Sending Handshake...");
                 this.socket?.send(`{"protocol":"json","version":1}\x1e`);
@@ -58,38 +65,6 @@ class TinySignalRClient {
             };
         });
     }
-    /**
-     * Connects to the server.
-     */
-    // async start(): Promise<void> {
-    //     // 1. Negotiate (Get Azure URL + Token)
-    //     const negotiateUrl = `${this.hubUrl}/negotiate?apiKey=${encodeURIComponent(this.apiKey)}`;
-    //     const response = await fetch(negotiateUrl, { method: "POST" });
-    //     if (!response.ok) throw new Error(`Negotiation failed: ${response.status} ${response.statusText}`);
-    //     //const negotiation = await response.json();
-    //     const negotiation = (await response.json()) as { url?: string; accessToken?: string };
-    //     // 2. Construct WebSocket URL
-    //     const endpoint = negotiation.url || negotiateUrl;
-    //     const token = negotiation.accessToken;
-    //     let wsUrl = endpoint.replace(/^http/, "ws");
-    //     if (token) wsUrl += (wsUrl.indexOf("?") < 0 ? "?" : "&") + `access_token=${encodeURIComponent(token)}`;
-    //     // 3. Open Socket
-    //     return new Promise((resolve, reject) => {
-    //         this.socket = new WebSocket(wsUrl);
-    //         this.socket.onopen = () => {
-    //             console.log("Socket Open. Sending Handshake...");
-    //             this.socket?.send(`{"protocol":"json","version":1}\x1e`);
-    //         };
-    //         this.socket.onerror = (err) => {
-    //             if (!this.keepAliveInterval) reject(err);
-    //         };
-    //         this.socket.onmessage = (event) => this.handleMessage(event, resolve);
-    //         this.socket.onclose = () => {
-    //             console.log("Socket disconnected.");
-    //             this.cleanup();
-    //         };
-    //     });
-    // }
     /**
      * Listen for messages from the server.
      */
@@ -113,32 +88,6 @@ class TinySignalRClient {
         };
         this.socket.send(JSON.stringify(packet) + "\x1e");
     }
-    // private handleMessage(event: MessageEvent, resolveHandshake: () => void) {
-    //     const rawText = event.data.toString();
-    //     const messages = rawText.split("\x1e");
-    //     for (const msg of messages) {
-    //         if (!msg) continue;
-    //         // Handle Handshake Response
-    //         if (msg === "{}") {
-    //             console.log("Handshake Complete. Connected!");
-    //             this.startKeepAlive();
-    //             resolveHandshake();
-    //             continue;
-    //         }
-    //         try {
-    //             const data = JSON.parse(msg);
-    //             // Type 1: Invocation (Server calling us)
-    //             if (data.type === 1 && data.target) {
-    //                 const cb = this.callbacks.get(data.target);
-    //                 if (cb) cb(...(data.arguments || []));
-    //             }
-    //             // Type 6: Ping (Keep-Alive)
-    //             else if (data.type === 6) {
-    //                 // Optional: Reset timeout timer here
-    //             }
-    //         } catch (e) { /* Ignore partial frames */ }
-    //     }
-    // }
     handleMessage(event, resolveHandshake) {
         const rawText = event.data.toString();
         const messages = rawText.split("\x1e");

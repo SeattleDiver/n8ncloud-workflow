@@ -4,17 +4,25 @@ const TinySignalRClient_1 = require("./TinySignalRClient");
 // Configuration
 const HUB_URL = "http://localhost:5268/workflow"; // Or your Azure/Production URL
 const API_KEY = "AN9FMzZ4ZeHgNutVXJ9OdLYIyRha2ovIrTXJAEvjgD9nypxS";
+const PATH = "mediasix/workflow-test";
 async function main() {
-    const client = new TinySignalRClient_1.TinySignalRClient(HUB_URL, API_KEY);
+    const client = new TinySignalRClient_1.TinySignalRClient(HUB_URL, API_KEY, PATH);
     // 1. SETUP LISTENERS (Before connecting)
     const payload = {
         apiKey: API_KEY,
-        path: "mediasix/workflow-test",
+        path: PATH,
     };
     // Listen for 'ReceiveMessage' from the server
     client.on("ExecutePrivateWorkflow", (request) => {
-        console.log(`[RECEIVED] Path ${request.Path}, Payload${request.payload}`);
-        //client.send("SendMessage", "BotClient", replyText);
+        console.log(`[RECEIVED] Path: ${request.Path || request.path || "?"}, Payload: ${request.payload}, Method:${request.method}`);
+        // 2. CONSTRUCT THE RESPONSE
+        var response = {
+            RequestId: request.RequestId || request.requestId || "",
+            Path: request.Path || request.path || "",
+            StatusCode: 200,
+            Payload: request.Payload || request.payload || ""
+        };
+        client.send("CompletePrivateWorkflow", response);
     });
     try {
         // 3. CONNECT
