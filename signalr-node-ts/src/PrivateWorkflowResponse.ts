@@ -1,6 +1,6 @@
 export interface PrivateWorkflowResponse {
-	RequestId: string;
-	StatusCode: number;
-	Path: string;
-	Payload: string; // base64
+	requestId: string;
+	statusCode: number;
+	path: string;
+	payload: string; // base64
 }

@@ -1,48 +1,95 @@
-import { TinySignalRClient } from './TinySignalRClient';
+// src/index.ts
+import { SignalRClient } from './SignalRClient';
 import { PrivateWorkflowRequest } from './PrivateWorkflowRequest';
 import { PrivateWorkflowResponse } from './PrivateWorkflowResponse';
+import { TinySignalRClient } from './TinySignalRClient';
 
 // Configuration
-const HUB_URL = "http://localhost:5268/workflow"; // Or your Azure/Production URL
+// Use 127.0.0.1 instead of localhost to prevent node from defaulting to IPv6 (::1)
+const HUB_URL = "http://127.0.0.1:5268/workflow"; 
 const API_KEY = "AN9FMzZ4ZeHgNutVXJ9OdLYIyRha2ovIrTXJAEvjgD9nypxS";
-const PATH    = "mediasix/workflow-test";
+const WORKFLOW_PATH = "mediasix/workflow-test";
 
 async function main() {
-    const client = new TinySignalRClient(HUB_URL, API_KEY, PATH);
 
-    // 1. SETUP LISTENERS (Before connecting)
-    const payload = {
-        apiKey: API_KEY,
-        path: PATH,
-    };
-    
-    // Listen for 'ReceiveMessage' from the server
-    client.on("ExecutePrivateWorkflow", (request: PrivateWorkflowRequest) => {
-        console.log(`[RECEIVED] Path: ${request.Path || request.path || "?"}, Payload: ${request.payload}, Method:${request.method}`);
+    // var tinyClient = new TinySignalRClient(HUB_URL, API_KEY, WORKFLOW_PATH);
+    // tinyClient.start();
 
-        // 2. CONSTRUCT THE RESPONSE
-        var response: PrivateWorkflowResponse = {
-            RequestId: request.RequestId || request.requestId || "",
-            Path: request.Path || request.path || "",
-            StatusCode: 200,
-            Payload: request.Payload || request.payload || ""
+    // 1. Initialize Client
+    // We pass the path here so the generic client injects it into the WebSocket URL.
+    // This allows the server's OnConnectedAsync to register the group immediately.
+    const client = new SignalRClient(HUB_URL, API_KEY, WORKFLOW_PATH);
+
+    // 2. Setup Listeners
+    client.on("ExecutePrivateWorkflow", async (request: PrivateWorkflowRequest) => {
+        console.log(`[RECEIVED] Request ID: ${request.requestId}`);
+        
+        // --- Business Logic Start ---
+        // Simulate processing time
+        // await new Promise(r => setTimeout(r, 500)); 
+        
+        const processingResult = {
+            status: "success",
+            data: "Processed by Node.js Client",
+            timestamp: new Date().toISOString()
         };
-        client.send("CompletePrivateWorkflow", response);
+        // --- Business Logic End ---
+
+        // 3. Construct Response
+        // Use strict camelCase properties to match PrivateWorkflowResponse interface
+        // and standard SignalR JSON serialization.
+        const response: PrivateWorkflowResponse = {
+            requestId: request.requestId || "", // Handle potential undefined
+            statusCode: 200,
+            path: request.path || "",
+            payload: JSON.stringify(processingResult),
+        };
+
+        try {
+            console.log("Sending completion response...");
+            await client.send("CompletePrivateWorkflow", response);
+            console.log("Response delivered.");
+        } catch (err) {
+            console.error("Failed to send response:", err);
+        }
     });
 
+    // 3. Connect with Startup Retry Logic
+    // client.start() throws if the initial connection fails. We loop until it succeeds.
+    console.log("Starting client...");
+    
+    while (true) {
+        try {
+            await client.start();
+            console.log("Connected to Hub.");
+            break; // Exit loop on success
+        } catch (err) {
+            console.error("Connection failed. Retrying in 5 seconds...");
+            // Cast error to access message safely
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error(`Error details: ${msg}`);
+            
+            // Wait 5 seconds before retrying
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+    }
+
+    // 4. Register and Run
     try {
-        // 3. CONNECT
-        console.log("Connecting...");
-        await client.start();
+        // We still send the registration packet so the custom _tracker on the server is updated
+        // (even though the group was likely added via the WebSocket URL params)
+        const registrationPayload = {
+            apiKey: API_KEY,
+            path: WORKFLOW_PATH,
+        };
+        
+        await client.send("RegisterPrivateWorkflow", registrationPayload);
+        console.log(`Registered for path: ${WORKFLOW_PATH}`);
         console.log("Listening for messages. Press Ctrl+C to exit.");
 
-        client.send("RegisterPrivateWorkflow", payload);
-
-        // 4. OPTIONAL: Send an initial greeting
-        //client.send("SendMessage", "BotClient", "I am online and listening!");
-
     } catch (err) {
-        console.error("Fatal Error:", err);
+        console.error("Registration failed:", err);
+        // We generally don't exit here; the connection might still be alive
     }
 }
 

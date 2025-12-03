@@ -1,7 +1,7 @@
 export interface PrivateWorkflowResponse {
-    RequestId: string;
-    StatusCode: number;
-    Path: string;
-    Payload: string;
+    requestId: string;
+    statusCode: number;
+    path: string;
+    payload: string;
 }
 //# sourceMappingURL=PrivateWorkflowResponse.d.ts.map
