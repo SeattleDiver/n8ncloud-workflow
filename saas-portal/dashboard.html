@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SaaS Customer Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Theme variables */
+    :root {
+      --color-primary-blue: #00C896; /* New primary theme color */
+      --color-dark-blue-bg: #009F77; /* Slightly darker teal for contrast */
+      --color-dark-gray: #1F2937;    /* Tailwind gray-800 */
+      --color-medium-gray: #4B5563;  /* Tailwind gray-600 */
+      --color-off-white: #F9FAFB;    /* Tailwind gray-50 */
+      --color-pure-white: #FFFFFF;
+      --color-border: #E5E7EB;       /* Tailwind gray-200 */
+      --color-light-gray: #D1D5DB;   /* Tailwind gray-300 */
+    }
+  
+    /* Utility classes bound to variables */
+    .bg-primary-blue { background-color: var(--color-primary-blue); }
+    .bg-dark-blue-bg { background-color: var(--color-dark-blue-bg); }
+    .text-dark-gray { color: var(--color-dark-gray); }
+    .text-medium-gray { color: var(--color-medium-gray); }
+    .bg-off-white { background-color: var(--color-off-white); }
+    .bg-pure-white { background-color: var(--color-pure-white); }
+    .text-pure-white { color: var(--color-pure-white); }
+    .border-border { border-color: var(--color-border); }
+  
+    /* Global font */
+    body { font-family: 'Montserrat', sans-serif; }
+  
+    /* Softer shadows */
+    .shadow-custom-sm {
+      box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05);
+    }
+    .shadow-custom-md {
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03);
+    }
+    .shadow-custom-xl {
+      box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05), 0 4px 6px -2px rgba(0,0,0,0.02);
+    }
+  
+    /* Sidebar collapse transition */
+    .sidebar { transition: width 0.3s ease-in-out; }
+    .sidebar.collapsed { width: 4rem; }
+    .sidebar.collapsed .app-name,
+    .sidebar.collapsed .nav-text,
+    .sidebar.collapsed .logo-large { display: none; }
+    .sidebar .logo-small { display: none; }
+    .sidebar.collapsed .logo-small { display: block; }
+  
+    /* ✅ Hover effect for left navigation using theme teal */
+    .nav-link { border-radius: 0.375rem; transition: background-color 0.25s ease, color 0.25s ease; }
+    .nav-link:hover {
+      background-color: var(--color-primary-blue);
+      color: var(--color-pure-white);
+    }
+    .nav-link:hover .nav-icon { stroke: var(--color-pure-white); }
+  
+    /* ✅ Secondary button hover */
+    .btn-secondary {
+      background-color: var(--color-off-white);
+      color: var(--color-dark-gray);
+      transition: background-color 0.25s ease, color 0.25s ease;
+    }
+    .btn-secondary:hover {
+      background-color: var(--color-light-gray);
+      color: var(--color-dark-gray);
+    }
+  </style>
+  
+</head>
+<body class="flex h-screen bg-off-white overflow-hidden">
+  <!-- Sidebar -->
+  <div id="sidebar" class="sidebar w-64 bg-pure-white border-r border-border flex flex-col shadow-custom-md relative">
+    <!-- Collapse Button -->
+    <button
+      id="sidebarToggle"
+      class="absolute top-4 -right-3 w-6 h-6 bg-primary-blue hover:bg-blue-600 text-white rounded-full flex items-center justify-center shadow-custom-sm focus:outline-none z-10"
+      aria-label="Toggle sidebar"
+    >
+      <svg id="toggleIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>
+      </svg>
+    </button>
+
+    <!-- Logo and App Name -->
+    <div class="h-16 flex items-center px-4 border-b border-border overflow-hidden">
+      <img src="https://via.placeholder.com/32/3B82F6/FFFFFF?text=L" alt="Logo" class="mr-2 rounded-full logo-large">
+      <img src="https://via.placeholder.com/24/3B82F6/FFFFFF?text=L" alt="Logo" class="rounded-full logo-small">
+      <span class="app-name text-xl font-bold text-dark-gray whitespace-nowrap">n8ncloud.io</span>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-grow p-4" aria-label="Sidebar">
+      <ul>
+        <li class="mb-2">
+          <a href="#" class="nav-link flex items-center py-2 px-3 text-medium-gray transition-colors duration-200">
+            <svg class="nav-icon w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+            </svg>
+            <span class="nav-text whitespace-nowrap">Dashboard</span>
+          </a>
+        </li>
+        <li class="mb-2">
+          <a href="#" class="nav-link flex items-center py-2 px-3 text-medium-gray transition-colors duration-200">
+            <svg class="nav-icon w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            <span class="nav-text whitespace-nowrap">Settings</span>
+          </a>
+        </li>
+        <li class="mb-2">
+          <a href="#" class="nav-link flex items-center py-2 px-3 text-medium-gray transition-colors duration-200">
+            <svg class="nav-icon w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+            </svg>
+            <span class="nav-text whitespace-nowrap">Billing</span>
+          </a>
+        </li>
+        <li class="mb-2">
+          <a href="#" class="nav-link flex items-center py-2 px-3 text-medium-gray transition-colors duration-200">
+            <svg class="nav-icon w-5 h-5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9.247a1 1 0 01.791-.592l5.88-1.594a1 1 0 011.12.592l1.63 3.195c.292.57-.044 1.255-.632 1.547l-5.748 2.766a1 1 0 01-1.118-.58l-1.63-3.195a1 1 0 01.791-.592z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-3 3m0 0l-3-3m3 3V9"></path>
+            </svg>
+            <span class="nav-text whitespace-nowrap">Support</span>
+          </a>
+        </li>
+      </ul>
+    </nav>
+  </div>
+
+  <!-- Main Content Area -->
+  <div class="flex-grow flex flex-col bg-off-white">
+    <!-- Top Menu -->
+    <header class="h-16 bg-pure-white border-b border-border flex items-center px-6 shadow-custom-sm">
+      <span class="text-lg font-semibold text-dark-gray">Welcome, Bob!</span>
+      <div class="ml-auto flex items-center">
+        <a href="#" class="text-medium-gray hover:text-dark-gray mr-6 transition-colors duration-200">Notifications</a>
+        <a href="#" class="flex items-center text-medium-gray hover:text-dark-gray transition-colors duration-200">
+          <!-- <img src="https://via.placeholder.com/32/BFDBFE/1F2937?text=U" alt="User Avatar" class="w-8 h-8 rounded-full mr-2"> -->
+          Profile
+        </a>
+      </div>
+    </header>
+
+    <!-- Body Content -->
+
+    <main class="flex-grow p-6 bg-off-white">
+        <div class="space-y-6">
+      
+          <!-- HEADER -->
+          <div>
+            <h1 class="text-3xl font-extrabold text-dark-gray mb-1">Dashboard</h1>
+            <p class="text-medium-gray">Monitor your API keys, activations, and data usage at a glance.</p>
+          </div>
+      
+          <!-- METRIC CARDS -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <!-- Activations -->
+            <div class="bg-pure-white border border-border rounded-xl shadow-custom-md p-5 flex flex-col">
+              <div class="text-sm text-medium-gray">Activations (Today)</div>
+              <div class="text-3xl font-bold text-dark-gray mt-1">1,284</div>
+              <div class="text-xs text-green-600 mt-2">▲ +12% vs yesterday</div>
+            </div>
+      
+            <!-- Data Transferred -->
+            <div class="bg-pure-white border border-border rounded-xl shadow-custom-md p-5 flex flex-col">
+              <div class="text-sm text-medium-gray">Data Transferred</div>
+              <div class="text-3xl font-bold text-dark-gray mt-1">842 MB</div>
+              <div class="text-xs text-red-500 mt-2">▼ -4% vs last week</div>
+            </div>
+      
+            <!-- API Calls -->
+            <div class="bg-pure-white border border-border rounded-xl shadow-custom-md p-5 flex flex-col">
+              <div class="text-sm text-medium-gray">API Calls</div>
+              <div class="text-3xl font-bold text-dark-gray mt-1">18,921</div>
+              <div class="text-xs text-green-600 mt-2">▲ +8% vs last week</div>
+            </div>
+      
+            <!-- Plan Usage -->
+            <div class="bg-pure-white border border-border rounded-xl shadow-custom-md p-5 flex flex-col">
+              <div class="text-sm text-medium-gray">Plan Usage</div>
+              <div class="text-3xl font-bold text-dark-gray mt-1">80%</div>
+              <div class="mt-3 h-2 w-full bg-light-gray rounded-full overflow-hidden">
+                <div class="h-full bg-primary-blue" style="width: 80%;"></div>
+              </div>
+            </div>
+          </div>
+      
+          <!-- USAGE CHARTS -->
+          <div class="bg-pure-white border border-border rounded-xl shadow-custom-xl p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-xl font-semibold text-dark-gray">Usage Trends</h2>
+              <div class="space-x-2">
+                <button class="px-3 py-1 text-sm font-medium text-dark-gray bg-off-white border border-border rounded hover:bg-primary-blue hover:text-pure-white transition-colors">Daily</button>
+                <button class="px-3 py-1 text-sm font-medium text-dark-gray bg-off-white border border-border rounded hover:bg-primary-blue hover:text-pure-white transition-colors">Weekly</button>
+                <button class="px-3 py-1 text-sm font-medium text-dark-gray bg-off-white border border-border rounded hover:bg-primary-blue hover:text-pure-white transition-colors">Monthly</button>
+              </div>
+            </div>
+            <canvas id="usageChart" height="120"></canvas>
+          </div>
+      
+          <!-- RECENT ACTIVITY -->
+          <div class="bg-pure-white border border-border rounded-xl shadow-custom-xl p-6">
+            <h2 class="text-xl font-semibold text-dark-gray mb-4">Recent Activations</h2>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-left text-dark-gray">
+                <thead class="border-b border-border bg-off-white">
+                  <tr>
+                    <th class="py-3 px-4 font-semibold">Timestamp</th>
+                    <th class="py-3 px-4 font-semibold">Workflow</th>
+                    <th class="py-3 px-4 font-semibold">Bytes</th>
+                    <th class="py-3 px-4 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="border-b border-border hover:bg-off-white transition-colors">
+                    <td class="py-2 px-4">2025-10-08 14:32</td>
+                    <td class="py-2 px-4">Webhook → SignalR Relay</td>
+                    <td class="py-2 px-4">128 KB</td>
+                    <td class="py-2 px-4 text-green-600 font-medium">Success</td>
+                  </tr>
+                  <tr class="border-b border-border hover:bg-off-white transition-colors">
+                    <td class="py-2 px-4">2025-10-08 13:47</td>
+                    <td class="py-2 px-4">Email → Verify Workflow</td>
+                    <td class="py-2 px-4">56 KB</td>
+                    <td class="py-2 px-4 text-green-600 font-medium">Success</td>
+                  </tr>
+                  <tr class="border-b border-border hover:bg-off-white transition-colors">
+                    <td class="py-2 px-4">2025-10-08 12:10</td>
+                    <td class="py-2 px-4">AI Summary Generation</td>
+                    <td class="py-2 px-4">244 KB</td>
+                    <td class="py-2 px-4 text-yellow-600 font-medium">Queued</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+      
+          <!-- API KEYS TABLE -->
+          <div class="bg-pure-white border border-border rounded-xl shadow-custom-xl p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-xl font-semibold text-dark-gray">API Keys</h2>
+              <button class="bg-primary-blue hover:bg-emerald-500 text-pure-white font-medium py-2 px-4 rounded-full shadow-custom-sm transition-colors">
+                + Generate API Key
+              </button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-left text-dark-gray">
+                <thead class="border-b border-border bg-off-white">
+                  <tr>
+                    <th class="py-3 px-4 font-semibold">Name</th>
+                    <th class="py-3 px-4 font-semibold">Token</th>
+                    <th class="py-3 px-4 font-semibold">Created</th>
+                    <th class="py-3 px-4 font-semibold">Last Used</th>
+                    <th class="py-3 px-4 font-semibold">Status</th>
+                    <th class="py-3 px-4 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="border-b border-border hover:bg-off-white transition-colors">
+                    <td class="py-2 px-4">Production Key</td>
+                    <td class="py-2 px-4 text-medium-gray">sk_live_2f8d...91a</td>
+                    <td class="py-2 px-4">2025-09-14</td>
+                    <td class="py-2 px-4">2025-10-08 13:47</td>
+                    <td class="py-2 px-4 text-green-600 font-medium">Active</td>
+                    <td class="py-2 px-4 text-right space-x-2">
+                      <button class="text-sm text-primary-blue hover:underline">Regenerate</button>
+                      <button class="text-sm text-red-500 hover:underline">Disable</button>
+                    </td>
+                  </tr>
+                  <tr class="border-b border-border hover:bg-off-white transition-colors">
+                    <td class="py-2 px-4">Staging Key</td>
+                    <td class="py-2 px-4 text-medium-gray">sk_test_91f2...aa3</td>
+                    <td class="py-2 px-4">2025-09-10</td>
+                    <td class="py-2 px-4">2025-10-07 09:10</td>
+                    <td class="py-2 px-4 text-yellow-600 font-medium">Limited</td>
+                    <td class="py-2 px-4 text-right space-x-2">
+                      <button class="text-sm text-primary-blue hover:underline">Regenerate</button>
+                      <button class="text-sm text-red-500 hover:underline">Disable</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+      
+        </div>
+      
+        <!-- Chart.js placeholder -->
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- <script>
+          const ctx = document.getElementById('usageChart');
+          new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
+              datasets: [{
+                label: 'Daily Activations',
+                data: [210,320,290,400,380,460,520],
+                borderColor: '#00C896',
+                backgroundColor: 'rgba(0,200,150,0.1)',
+                fill: true,
+                tension: 0.4
+              }]
+            },
+            options: {
+              scales: {
+                y: { beginAtZero: true }
+              },
+              plugins: { legend: { display: false } },
+              responsive: true,
+              maintainAspectRatio: false
+            }
+          });
+        </script> -->
+      </main>
+      
+
+  </div>
+
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const toggleIcon = document.getElementById('toggleIcon');
+    const navTexts = document.querySelectorAll('.nav-text');
+    const appName = document.querySelector('.app-name');
+    const logoLarge = document.querySelector('.logo-large');
+    const logoSmall = document.querySelector('.logo-small');
+
+    sidebarToggle.addEventListener('click', () => {
+      sidebar.classList.toggle('collapsed');
+
+      if (sidebar.classList.contains('collapsed')) {
+        toggleIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path>`; // Right arrow
+        appName.classList.add('hidden');
+        logoLarge.classList.add('hidden');
+        logoSmall.classList.remove('hidden');
+        navTexts.forEach(text => text.classList.add('hidden'));
+        sidebarToggle.classList.remove('-right-3');
+        sidebarToggle.classList.add('right-0');
+      } else {
+        toggleIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path>`; // Left arrow
+        appName.classList.remove('hidden');
+        logoLarge.classList.remove('hidden');
+        logoSmall.classList.add('hidden');
+        navTexts.forEach(text => text.classList.remove('hidden'));
+        sidebarToggle.classList.add('-right-3');
+        sidebarToggle.classList.remove('right-0');
+      }
+    });
+
+    // Optionally start collapsed:
+    // sidebarToggle.click();
+  </script>
+</body>
+</html>

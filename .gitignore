@@ -1,0 +1,83 @@
+## Visual Studio standard ignores
+.vs/
+[Bb]in/
+[Oo]bj/
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+## Nuget
+.nuget/
+packages/
+*.nupkg
+# If you use "restore packages on build", you may want to ignore the packages folder.
+# If you check in your packages (not recommended), comment out the line above.
+
+## Visual Studio Code
+.vscode/
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.mono
+*.xproj.user
+*.props
+
+## Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]ealses/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## Azure Functions / WebJobs standard ignores
+# (Usually, these are ignored to prevent leaks. See the override section below)
+project.lock.json
+project.fragment.lock.json
+secrets.json
+
+## MSTest test Results
+[Tt]est[Rr]esult*/
+*.trx
+
+## NUnit
+*.VisualState.xml
+TestResult.xml
+
+## Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+## OS Generated files
+.DS_Store
+Thumbs.db
+
+# ==============================================================================
+#  AZURE SECRETS OVERRIDES (Requested)
+# ==============================================================================
+
+# WARNING: The lines below use '!' to tell Git to explicitly TRACK these files.
+# This will commit your connection strings and keys to the repository.
+
+# Allow Azure Functions local settings (contains connection strings)
+!local.settings.json
+
+# Allow ASP.NET Core Development settings (may contain secrets)
+!appsettings.Development.json
