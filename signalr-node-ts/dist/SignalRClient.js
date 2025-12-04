@@ -188,17 +188,6 @@ class HubConnection {
         return new Promise((resolve, reject) => {
             const ws = new WebSocket(wsUrl);
             this.socket = ws;
-            // --- NEW: Capture Handshake Errors ---
-            // (ws as any).on('unexpected-response', (req: any, res: any) => {
-            //     const debugInfo = `HTTP ${res.statusCode} ${res.statusMessage}`;
-            //     // Read the response body if possible to see error details
-            //     let body = '';
-            //     res.on('data', (chunk: any) => body += chunk);
-            //     res.on('end', () => {
-            //         this.log(LogLevel.Error, `Connection rejected by server: ${debugInfo}`, body);
-            //         // The 'error' event will usually follow this, but we log explicitly here
-            //     });
-            // });
             ws.onopen = () => {
                 this.log(LogLevel.Debug, 'WebSocket Connected. Sending Handshake.');
                 ws.send(`{"protocol":"json","version":1}\x1e`);
@@ -292,23 +281,24 @@ class HubConnection {
             }
         }
     }
-    resolveNegotiateUrl(url) {
-        const index = url.indexOf('?');
-        let base = url;
-        let query = '';
-        // Separate the Base URL (Path) from the Query String
-        if (index !== -1) {
-            base = url.substring(0, index);
-            query = url.substring(index);
-        }
-        // Append /negotiate to the path
-        base = base.replace(/\/$/, '') + '/negotiate';
-        // Reconstruct: Path/negotiate + Original Query + Negotiate Version
-        let u = base + query;
-        // u += (u.indexOf('?') === -1 ? '?' : '&') + 'negotiateVersion=1';
-        u += "&group=mediasix%2Fworkflow-test";
-        return u;
-    }
+    // private resolveNegotiateUrl(url: string): string {
+    //     const index = url.indexOf('?');
+    //     let base = url;
+    //     let query = '';
+    //     // Separate the Base URL (Path) from the Query String
+    //     if (index !== -1) {
+    //         base = url.substring(0, index);
+    //         query = url.substring(index);
+    //     }
+    //     // Append /negotiate to the path
+    //     base = base.replace(/\/$/, '') + '/negotiate';
+    //     // Reconstruct: Path/negotiate + Original Query + Negotiate Version
+    //     let u = base + query;
+    //     // u += (u.indexOf('?') === -1 ? '?' : '&') + 'negotiateVersion=1';
+    //     // u += "&group=mediasix%2Fworkflow-test";
+    //     u += "&group=" + this.group;
+    //     return u;
+    // }
     startKeepAlive() {
         clearInterval(this.keepAliveInterval);
         this.keepAliveInterval = setInterval(() => {
@@ -321,18 +311,25 @@ class HubConnection {
         this.pendingInvocations.forEach(p => p.reject(new Error('Connection closed')));
         this.pendingInvocations.clear();
     }
-    fireReconnectingCallbacks(err) { this.onReconnectingCallbacks.forEach(cb => { try {
-        cb(err);
+    fireReconnectingCallbacks(err) {
+        this.onReconnectingCallbacks.forEach(cb => { try {
+            cb(err);
+        }
+        catch { } });
     }
-    catch { } }); }
-    fireReconnectedCallbacks() { const id = this.connectionId || undefined; this.onReconnectedCallbacks.forEach(cb => { try {
-        cb(id);
+    fireReconnectedCallbacks() {
+        const id = this.connectionId || undefined;
+        this.onReconnectedCallbacks.forEach(cb => { try {
+            cb(id);
+        }
+        catch { } });
     }
-    catch { } }); }
-    fireCloseCallbacks(err) { this.onCloseCallbacks.forEach(cb => { try {
-        cb(err);
+    fireCloseCallbacks(err) {
+        this.onCloseCallbacks.forEach(cb => { try {
+            cb(err);
+        }
+        catch { } });
     }
-    catch { } }); }
     log(level, msg, ...args) {
         if (level >= this.logLevel) {
             const prefix = `[${new Date().toISOString()}]`;
@@ -353,7 +350,7 @@ class HubConnectionBuilder {
         this.apiKey = '';
         this.group = '';
         this.options = {};
-        this.reconnectDelays = [0, 2000, 10000, 30000];
+        this.reconnectDelays = [0, 500, 500, 500, 1000, 1000, 1000, 2000, 2000, 2000, 5000, 5000, 5000, 10000, 10000, 10000];
         this.logLevel = LogLevel.Information;
     }
     withUrl(url, options) {
@@ -435,6 +432,14 @@ class SignalRClient {
     async send(methodName, ...args) {
         // Return the promise so the caller can await completion/results if needed
         return this.connection.invoke(methodName, ...args);
+    }
+    /**
+     * Registers a callback to run when the connection is re-established
+     * after being lost. Use this to re-register groups or workflows.
+     * @param callback Function to execute. receives the new Connection ID.
+     */
+    onReconnected(callback) {
+        this.connection.onreconnected(callback);
     }
 }
 exports.SignalRClient = SignalRClient;

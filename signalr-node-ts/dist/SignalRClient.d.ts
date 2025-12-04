@@ -47,7 +47,6 @@ export declare class HubConnection {
     private connectInternal;
     private handleAutomaticReconnect;
     private handleRawMessage;
-    private resolveNegotiateUrl;
     private startKeepAlive;
     private cleanup;
     private fireReconnectingCallbacks;
@@ -86,5 +85,11 @@ export declare class SignalRClient {
      * @param args The arguments to pass to the method.
      */
     send(methodName: string, ...args: any[]): Promise<any>;
+    /**
+     * Registers a callback to run when the connection is re-established
+     * after being lost. Use this to re-register groups or workflows.
+     * @param callback Function to execute. receives the new Connection ID.
+     */
+    onReconnected(callback: (connectionId?: string) => void): void;
 }
 //# sourceMappingURL=SignalRClient.d.ts.map

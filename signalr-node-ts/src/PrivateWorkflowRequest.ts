@@ -1,3 +1,5 @@
+import { PrivateWorkflowPayload } from './PrivateWorkflowPayload';
+
 export interface PrivateWorkflowRequest {
 	requestId?: string;
 	RequestId?: string;
@@ -8,8 +10,8 @@ export interface PrivateWorkflowRequest {
 	path?: string;
 	Path?: string;
 
-	payload?: string; // may be base64 or JSON string
-	Payload?: string;
+	payload?: PrivateWorkflowPayload;
+	Payload?: PrivateWorkflowPayload;
 
 	headers?: Record<string, string>;
 	Headers?: Record<string, string>;
