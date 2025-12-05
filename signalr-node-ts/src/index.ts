@@ -74,11 +74,11 @@ async function main() {
 
         // B. Handle Reconnection (The New Addition)
         // This callback runs automatically when the connection drops and is restored.
-        client.onReconnected(async (newConnectionId) => {
-            console.warn(`[LIFECYCLE] Connection restored! New ID: ${newConnectionId}`);
-            // We must re-register because the server likely cleaned up our mapping during the disconnect
-            await registerToHub();
-        });
+        // client.onReconnected(async (newConnectionId) => {
+        //     console.warn(`[LIFECYCLE] Connection restored! New ID: ${newConnectionId}`);
+        //     // We must re-register because the server likely cleaned up our mapping during the disconnect
+        //     await registerToHub();
+        // });
     });
 
     // 3. Connect with Startup Retry Logic

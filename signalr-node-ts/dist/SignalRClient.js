@@ -166,7 +166,7 @@ class HubConnection {
                 this.log(LogLevel.Information, "finalUrl:", finalUrl);
             }
             catch (e) {
-                this.log(LogLevel.Error, 'Negotiation failed', e);
+                //this.log(LogLevel.Error, 'Negotiation failed', e);
                 throw e;
             }
         }
@@ -350,7 +350,7 @@ class HubConnectionBuilder {
         this.apiKey = '';
         this.group = '';
         this.options = {};
-        this.reconnectDelays = [0, 500, 500, 500, 1000, 1000, 1000, 2000, 2000, 2000, 5000, 5000, 5000, 10000, 10000, 10000];
+        this.reconnectDelays = [0, 2000, 2000, 2000, 5000, 5000, 5000, 10000, 10000, 10000];
         this.logLevel = LogLevel.Information;
     }
     withUrl(url, options) {
